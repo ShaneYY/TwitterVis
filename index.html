@@ -28,7 +28,7 @@
   <body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.3/d3.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.9/topojson.min.js"></script>
-    <script src="/users/siyangzhang/node_modules/datamaps/dist/datamaps.usa.min.js"></script>
+    <script src="./datamaps.usa.min.js"></script>
     <div id="map_container" style="position: fixed; top: 0px; left: 0px; width: 1000px; height: 600px;"></div>
     <div id='vis-container' style="position: fixed; top: 100px; left: 900px; width: 200px; height:100px;"></div>
    <script>
@@ -131,7 +131,6 @@
                     .style("text-anchor", "end")
                     .text("Value");
 
-
                 var updateBars = function(data) {
                     // First update the y-axis domain to match data
                     yScale.domain( d3.extent(data) );
@@ -141,6 +140,15 @@
                     
                     console.log(selectedState);
 
+                    function colorPicker(d) {
+                        if (d>1) return "#5E4FA2"
+                        else if (d>0.4) return "#FFFFBF";
+                        else if (d>0.3) return "#FEE08B";
+                        else if (d>0.2) return "#FDAE61";
+                        else if (d>0.1) return "#F46D43"; 
+                        else if (d>0) return "#D53E4F";
+                    }
+
                     // Add bars for new data
                     bars.enter()
                       .append("rect")
@@ -148,13 +156,15 @@
                         .attr("x", function(d,i) { return xScale( nutritionFields[i] ); })
                         .attr("width", xScale.rangeBand())
                         .attr("y", function(d,i) { return yScale(d); })
-                        .attr("height", function(d,i) { return height - yScale(d); });
+                        .attr("height", function(d,i) { return height - yScale(d); })
+                        .style("fill", function(d) { return colorPicker(d); });
 
                     // Update old ones, already have x / width from before
                     bars
                         .transition().duration(250)
                         .attr("y", function(d,i) { return yScale(d); })
-                        .attr("height", function(d,i) { return height - yScale(d); });
+                        .attr("height", function(d,i) { return height - yScale(d); })
+                        .style("fill", function(d) { return colorPicker(d); });
 
                     // Remove old ones
                     bars.exit().remove();
@@ -199,16 +209,16 @@
 
       fills: {
       'Nofill': '#000000',
-      's1': '#5E4FA2',
-      's2': '#3288BD',
-      's3': '#66C2A5',
-      's4': '#ABDDA4',
-      's5': '#E6F598',
-      's6': '#FFFFBF',
-      's7': '#FEE08B',
-      's8': '#FDAE61',
-      's9': '#F46D43',
-      's10': '#D53E4F',
+      's10': '#5E4FA2',
+      's9': '#3288BD',
+      's8': '#66C2A5',
+      's7': '#ABDDA4',
+      's6': '#E6F598',
+      's5': '#FFFFBF',
+      's4': '#FEE08B',
+      's3': '#FDAE61',
+      's2': '#F46D43',
+      's1': '#D53E4F',
 
       defaultFill: '#9E0142'
     },
@@ -302,7 +312,7 @@
           "fillKey": "Nofill",
       },
       "OH": {
-          "fillKey": "s10",
+          "fillKey": "s1",
       },
       "OK": {
           "fillKey": "Nofill",
@@ -350,7 +360,7 @@
           "fillKey": "Nofill",
       },
       "CA": {
-          "fillKey": "s1",
+          "fillKey": "s10",
       },
       "CT": {
           "fillKey": "Nofill",
