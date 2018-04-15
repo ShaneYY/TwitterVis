@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Twitter Sentiment</title>
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <style>
+        body {
+            font: 10px sans-serif;
+        }
+        select {
+            display: block;
+        }
+        .bar {
+            fill: purple;
+            opacity: 0.8;
+        }
+
+        .axis path,
+        .axis line {
+            fill: none;
+            stroke: #000;
+            shape-rendering: crispEdges;
+        }
+        </style>
+    <svg height="500"></svg>
+  </head>
+  <body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.3/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/1.6.9/topojson.min.js"></script>
+    <script src="/users/siyangzhang/node_modules/datamaps/dist/datamaps.usa.min.js"></script>
+    <div id="map_container" style="position: fixed; top: 0px; left: 0px; width: 1000px; height: 600px;"></div>
+    <div id='vis-container' style="position: fixed; top: 100px; left: 900px; width: 200px; height:100px;"></div>
+   <script>
+    var data = d3.range(10);
+
+    var colors = d3.scale.quantize()
+        .domain([0,10])
+        .range(["#5E4FA2", "#3288BD", "#66C2A5", "#ABDDA4", "#E6F598",
+        "#FFFFBF", "#FEE08B", "#FDAE61", "#F46D43", "#D53E4F", "#9E0142"]);
+
+    var svg = d3.select("svg");
+
+    var selectedState;
+    
+    var rects = svg.selectAll(".rects")
+    	.data(data)
+    	.enter()
+    	.append("rect")
+    	.attr("x", 10)
+    	.attr("height", 100)
+    	.attr("y", (d,i)=> i*50)
+    	.attr("width", 50)
+    	.attr("fill", d=>colors(d))
+    	.attr("stroke", "gray");
+
+    var twitter = new Datamap({
+      scope: 'usa',
+      element: document.getElementById('map_container'),
+      done: function(datamap) {
+        datamap.svg.selectAll('.datamaps-subunit').on('click', function(geography) {
+        selectedState = geography.properties.name
+        if (selectedState == "Ohio") {
+            // Load and munge data, then make the visualization.
+            var fileName = "./OH.csv";
+            } else if (selectedState == "California") {
+                var fileName = "./CA.csv";
+            }
+            var nutritionFields = ["3-Mar", "4-Mar", "5-Mar", "6-Mar", "7-Mar"];
+
+            d3.csv(fileName, function(error, data) {
+                var cerealMap = {};
+                data.forEach(function(d) {
+                    var cereal = d.date;
+                    cerealMap[cereal] = [];
+
+                    // { cerealName: [ bar1Val, bar2Val, ... ] }
+                    nutritionFields.forEach(function(field) {
+                        cerealMap[cereal].push( +d[field] );
+                    });
+                });
+                makeVis(cerealMap);
+            });
+
+            var makeVis = function(cerealMap) {
+                // Define dimensions of vis
+                var margin = { top: 30, right: 50, bottom: 30, left: 50 },
+                    width  = 350 - margin.left - margin.right,
+                    height = 150 - margin.top  - margin.bottom;
+
+                // Make x scale
+                var xScale = d3.scale.ordinal()
+                    .domain(nutritionFields)
+                    .rangeRoundBands([0, width], 0.1);
+
+                // Make y scale, the domain will be defined on bar update
+                var yScale = d3.scale.linear()
+                    .range([height, 0]);
+
+                // Create canvas
+                var canvas = d3.select("#vis-container")
+                  .append("svg")
+                    .attr("width",  width  + margin.left + margin.right)
+                    .attr("height", height + margin.top  + margin.bottom)
+                  .append("g")
+                    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+                // Make x-axis and add to canvas
+                var xAxis = d3.svg.axis()
+                    .scale(xScale)
+                    .orient("bottom");
+
+                canvas.append("g")
+                    .attr("class", "x axis")
+                    .attr("transform", "translate(0," + height + ")")
+                    .call(xAxis);
+
+                // Make y-axis and add to canvas
+                var yAxis = d3.svg.axis()
+                    .scale(yScale)
+                    .orient("left");
+
+                var yAxisHandleForUpdate = canvas.append("g")
+                    .attr("class", "y axis")
+                    .call(yAxis);
+
+                yAxisHandleForUpdate.append("text")
+                    .attr("transform", "rotate(-90)")
+                    .attr("y", 6)
+                    .attr("dy", ".71em")
+                    .style("text-anchor", "end")
+                    .text("Value");
+
+
+                var updateBars = function(data) {
+                    // First update the y-axis domain to match data
+                    yScale.domain( d3.extent(data) );
+                    yAxisHandleForUpdate.call(yAxis);
+
+                    var bars = canvas.selectAll(".bar").data(data);
+                    
+                    console.log(selectedState);
+
+                    // Add bars for new data
+                    bars.enter()
+                      .append("rect")
+                        .attr("class", "bar")
+                        .attr("x", function(d,i) { return xScale( nutritionFields[i] ); })
+                        .attr("width", xScale.rangeBand())
+                        .attr("y", function(d,i) { return yScale(d); })
+                        .attr("height", function(d,i) { return height - yScale(d); });
+
+                    // Update old ones, already have x / width from before
+                    bars
+                        .transition().duration(250)
+                        .attr("y", function(d,i) { return yScale(d); })
+                        .attr("height", function(d,i) { return height - yScale(d); });
+
+                    // Remove old ones
+                    bars.exit().remove();
+                };
+
+                // Handler for dropdown value change
+                var dropdownChange = function() {
+                    var newCereal = d3.select(this).property('value'),
+                        newData   = cerealMap[newCereal];
+
+                    updateBars(newData);
+                };
+
+                // Get names of cereals, for dropdown
+                var cereals = Object.keys(cerealMap).sort();
+
+                var dropdown = d3.select("#vis-container")
+                    .insert("select", "svg")
+                    .on("change", dropdownChange);
+
+                dropdown.selectAll("option")
+                    .data(cereals)
+                  .enter().append("option")
+                    .attr("value", function (d) { return d; })
+                    .text(function (d) {
+                        return d[0].toUpperCase() + d.slice(1,d.length); // capitalize 1st letter
+                    });
+
+                var initialData = cerealMap[ cereals[0] ];
+                updateBars(initialData);
+            };
+        });
+      },
+      geographyConfig: {
+        highlightBorderColor: '#bada55',
+       popupTemplate: function(geography, data) {
+          return '<div class="hoverinfo">' + geography.properties.name + "hover"
+        },
+        highlightBorderWidth: 3
+      },
+
+
+      fills: {
+      'Nofill': '#000000',
+      's1': '#5E4FA2',
+      's2': '#3288BD',
+      's3': '#66C2A5',
+      's4': '#ABDDA4',
+      's5': '#E6F598',
+      's6': '#FFFFBF',
+      's7': '#FEE08B',
+      's8': '#FDAE61',
+      's9': '#F46D43',
+      's10': '#D53E4F',
+
+      defaultFill: '#9E0142'
+    },
+
+    data:{
+      "AZ": {
+          "fillKey": "Nofill",
+      },
+      "CO": {
+          "fillKey": "Nofill",
+      },
+      "DE": {
+          "fillKey": "Nofill",
+      },
+      "FL": {
+          "fillKey": "Nofill",
+      },
+      "GA": {
+          "fillKey": "Nofill",
+      },
+      "HI": {
+          "fillKey": "Nofill",
+      },
+      "ID": {
+          "fillKey": "Nofill",
+      },
+      "IL": {
+          "fillKey": "Nofill",
+      },
+      "IN": {
+          "fillKey": "Nofill",
+      },
+      "IA": {
+          "fillKey": "Nofill",
+      },
+      "KS": {
+          "fillKey": "Nofill",
+      },
+      "KY": {
+          "fillKey": "Nofill",
+      },
+      "LA": {
+          "fillKey": "Nofill",
+      },
+      "MD": {
+          "fillKey": "Nofill",
+      },
+      "ME": {
+          "fillKey": "Nofill",
+      },
+      "MA": {
+          "fillKey": "Nofill",
+      },
+      "MN": {
+          "fillKey": "Nofill",
+      },
+      "MI": {
+          "fillKey": "Nofill",
+      },
+      "MS": {
+          "fillKey": "Nofill",
+      },
+      "MO": {
+          "fillKey": "Nofill",
+      },
+      "MT": {
+          "fillKey": "Nofill",
+      },
+      "NC": {
+          "fillKey": "Nofill",
+      },
+      "NE": {
+          "fillKey": "Nofill",
+      },
+      "NV": {
+          "fillKey": "Nofill",
+      },
+      "NH": {
+          "fillKey": "Nofill",
+      },
+      "NJ": {
+          "fillKey": "Nofill",
+      },
+      "NY": {
+          "fillKey": "Nofill",
+      },
+      "ND": {
+          "fillKey": "Nofill",
+      },
+      "NM": {
+          "fillKey": "Nofill",
+      },
+      "OH": {
+          "fillKey": "s10",
+      },
+      "OK": {
+          "fillKey": "Nofill",
+      },
+      "OR": {
+          "fillKey": "Nofill",
+      },
+      "PA": {
+          "fillKey": "Nofill",
+      },
+      "RI": {
+          "fillKey": "Nofill",
+      },
+      "SC": {
+          "fillKey": "Nofill",
+      },
+      "SD": {
+          "fillKey": "Nofill",
+      },
+      "TN": {
+          "fillKey": "Nofill",
+      },
+      "TX": {
+          "fillKey": "Nofill",
+      },
+      "UT": {
+          "fillKey": "Nofill",
+      },
+      "WI": {
+          "fillKey": "Nofill",
+      },
+      "VA": {
+          "fillKey": "Nofill",
+      },
+      "VT": {
+          "fillKey": "Nofill",
+      },
+      "WA": {
+          "fillKey": "Nofill",
+      },
+      "WV": {
+          "fillKey": "Nofill",
+      },
+      "WY": {
+          "fillKey": "Nofill",
+      },
+      "CA": {
+          "fillKey": "s1",
+      },
+      "CT": {
+          "fillKey": "Nofill",
+      },
+      "AK": {
+          "fillKey": "Nofill",
+      },
+      "AR": {
+          "fillKey": "Nofill",
+      },
+      "AL": {
+          "fillKey": "Nofill",
+      }
+    }
+    });
+
+    twitter.labels();
+
+    </script>
+
+  </body>
+</html>
